@@ -48,7 +48,7 @@ func (g *game) listen(c *client) {
 			scanner := bufio.NewScanner(c.conn)
 			for scanner.Scan() {
 				escapeSequence := scanner.Text()
-				fmt.Fprintf(logFile, "escapeSequence=%q\n", escapeSequence)
+				fmt.Fprintf(mw, "escapeSequence %q\n", escapeSequence)
 				switch escapeSequence {
 				case "\x1b[A":
 					fallthrough
@@ -64,7 +64,7 @@ func (g *game) listen(c *client) {
 				case "l": // Right
 					g.board.move(msg{
 						id: c.id,
-						x:  1,
+						x:  2,
 						y:  0,
 					})
 
@@ -82,7 +82,7 @@ func (g *game) listen(c *client) {
 				case "h": // Left
 					g.board.move(msg{
 						id: c.id,
-						x:  -1,
+						x:  -2,
 						y:  0,
 					})
 
@@ -147,7 +147,9 @@ func (g *game) render() {
 	s := g.board.render()
 	var err error
 	for _, client := range g.clients {
-		_, err = fmt.Fprintln(client.conn, s)
+		// Very important not to send a newline to the client!
+		// Doing so will enable a player to go offscreen top and bottom for many ticks.
+		_, err = fmt.Fprint(client.conn, s)
 		if err != nil {
 			log.Printf("err=%+v\n", err)
 		}

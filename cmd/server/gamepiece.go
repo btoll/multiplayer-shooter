@@ -1,10 +1,13 @@
 package main
 
+import "fmt"
+
 type gamepiece interface {
 	draw(gameboard)
 	getColor() color
 	getCardinalDirection() string
 	getDirection() direction
+	getKind() string
 	getPosition() position
 	getSymbol() rune
 	isStopped() bool
@@ -25,6 +28,7 @@ type position struct {
 type pieceBase struct {
 	id     int
 	color  color
+	kind   string
 	symbol rune
 	prev   position
 	cur    position
@@ -52,6 +56,10 @@ func (g pieceBase) getCardinalDirection() string {
 
 func (g pieceBase) getDirection() direction {
 	return g.dir
+}
+
+func (g pieceBase) getKind() string {
+	return g.kind
 }
 
 func (g pieceBase) getPosition() position {
@@ -99,6 +107,7 @@ func newBiplane(c createGamepiece) *biplane {
 		pieceBase: &pieceBase{
 			id:    c.Id,
 			color: c.Color,
+			kind:  "biplane",
 			//			symbol: '🚁',
 			symbol: 'X',
 			cur:    c.Position,
@@ -129,6 +138,7 @@ func (b *biplane) draw(gameboard gameboard) {
 	b.cur.row = pos.row
 	b.cur.col = pos.col
 	board[b.cur.row][b.cur.col] = b.id
+	fmt.Fprintf(mw, "[INFO] Moved piece %d %#v\n", b.id, pos)
 }
 
 var _ gamepiece = (*bullet)(nil)
@@ -146,10 +156,10 @@ func newBullet(c createGamepiece) *bullet {
 		c.Position.col -= 4
 	}
 	if c.Direction.y > 0 {
-		c.Position.row += 4
+		c.Position.row += 2
 	}
 	if c.Direction.y < 0 {
-		c.Position.row -= 4
+		c.Position.row -= 2
 	}
 	//	if c.position.row >= c.dimension.rows ||
 	//		c.position.col >= c.dimension.cols {
@@ -159,6 +169,7 @@ func newBullet(c createGamepiece) *bullet {
 		pieceBase: &pieceBase{
 			id:     c.Id,
 			color:  c.Color,
+			kind:   "bullet",
 			symbol: '-',
 			cur:    c.Position,
 			dir: direction{
@@ -174,14 +185,26 @@ func newBullet(c createGamepiece) *bullet {
 	return b
 }
 
+func increaseMagnitude(n int) int {
+	if n != 0 {
+		if n < 0 {
+			return n - 1
+		}
+		return n + 1
+	}
+	return n
+}
+
 func (b *bullet) draw(gameboard gameboard) {
 	board := gameboard.getBoard()
 
 	b.prev.row = b.cur.row
 	b.prev.col = b.cur.col
 
-	destRow := b.cur.row + b.dir.y
-	destCol := b.cur.col + b.dir.x
+	// A fired bullet should continue to outpace the biplane that fired it,
+	// so increase its direction +/- 1 depending upon its direction.
+	destRow := b.cur.row + increaseMagnitude(b.dir.y)
+	destCol := b.cur.col + increaseMagnitude(b.dir.x)
 	pos := position{destRow, destCol}
 
 	if b.rules.boundsCheck(pos, gameboard.getDimension()) {
