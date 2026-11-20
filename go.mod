@@ -1,4 +1,4 @@
-module github.com/btoll/multiplayer
+module github.com/btoll/multiplayer-shooter
 
 go 1.25.0
 

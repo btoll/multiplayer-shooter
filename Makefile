@@ -1,7 +1,7 @@
 CC      	= /usr/local/go/bin/go
 #CPPFLAGS # preprocessor flags
 #LDFLAGS
-#PACKAGE		= multiplayer
+#PACKAGE		= multiplayer-shooter
 prefix		= .
 exec_prefix = ${prefix}
 bindir		= $(exec_prefix)/bin
