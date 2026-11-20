@@ -10,7 +10,7 @@ import (
 	"golang.org/x/term"
 )
 
-var logFile, _ = os.Create("debug.log")
+var logFile, _ = os.Create("debug-client.log")
 
 func main() {
 	conn, err := net.Dial("tcp", ":1111")

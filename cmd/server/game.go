@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log"
 	"math/rand/v2"
 	"os"
@@ -10,7 +11,8 @@ import (
 )
 
 var (
-	logFile, _ = os.Create("debug.log")
+	logFile, _ = os.Create("debug-server.log")
+	mw         = io.MultiWriter(os.Stdout, logFile)
 	// TODO
 	// The total number of players supported is equal to the length of the array.
 	// Note that the logic needs to be written to enforce this.
@@ -90,12 +92,12 @@ func (g *game) listen(c *client) {
 				case " ": // shoot
 					piece := g.board.getGamepiece(c.id)
 					g.board.register(createGamepiece{
-						id:        randInt(100, 1000),
-						color:     color(c.id),
-						kind:      "bullet",
-						position:  piece.getPosition(),
-						direction: piece.getDirection(),
-						dimension: g.board.(*biplanes).dimension,
+						Id:        randInt(100, 1000),
+						Color:     color(c.id),
+						Kind:      "bullet",
+						Position:  piece.getPosition(),
+						Direction: piece.getDirection(),
+						Dimension: g.board.(*biplanes).dimension,
 					})
 
 				case "s": // stop
@@ -111,28 +113,28 @@ func (g *game) listen(c *client) {
 }
 
 type createGamepiece struct {
-	id        int
-	color     color
-	kind      string
-	dimension dimension
-	position  position
-	direction direction
+	Id        int       `json:"id"`
+	Color     color     `json:"color"`
+	Kind      string    `json:"kind"`
+	Dimension dimension `json:"dimension"`
+	Position  position  `json:"position"`
+	Direction direction `json:"direction"`
 }
 
 func (g *game) register(c *client) {
 	g.clients[c.id] = c
 	dimension := g.board.(*biplanes).dimension
 	g.board.register(createGamepiece{
-		id:    int(c.id),
-		color: color(c.id),
-		kind:  "biplane",
-		position: position{
+		Id:    int(c.id),
+		Color: color(c.id),
+		Kind:  "biplane",
+		Position: position{
 			getDivisibleBy2(dimension.rows), // All gamepieces MUST be on rows and cols that are divisible by two.
 			getDivisibleBy2(dimension.cols),
 		},
 	})
 	g.listen(c)
-	fmt.Printf("[INFO] User %s registered (ID=%d).\n", c.name, c.id)
+	fmt.Fprintf(mw, "[INFO] User %s registered (ID=%d).\n", c.name, c.id)
 }
 
 func (g *game) render() {

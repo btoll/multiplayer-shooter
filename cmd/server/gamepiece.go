@@ -1,7 +1,5 @@
 package main
 
-import "fmt"
-
 type gamepiece interface {
 	draw(gameboard)
 	getColor() color
@@ -77,7 +75,7 @@ func (g *pieceBase) setDirection(d direction) {
 }
 
 func newGamePiece(c createGamepiece) gamepiece {
-	switch c.kind {
+	switch c.Kind {
 	case "biplane":
 		return newBiplane(c)
 	case "bullet":
@@ -99,11 +97,11 @@ type biplane struct {
 func newBiplane(c createGamepiece) *biplane {
 	return &biplane{
 		pieceBase: &pieceBase{
-			id:    c.id,
-			color: c.color,
+			id:    c.Id,
+			color: c.Color,
 			//			symbol: '🚁',
 			symbol: 'X',
-			cur:    c.position,
+			cur:    c.Position,
 		},
 		rules: biplaneRules{},
 	}
@@ -141,32 +139,31 @@ type bullet struct {
 }
 
 func newBullet(c createGamepiece) *bullet {
-	if c.direction.x > 0 {
-		c.position.col += 4
+	if c.Direction.x > 0 {
+		c.Position.col += 4
 	}
-	if c.direction.x < 0 {
-		c.position.col -= 4
+	if c.Direction.x < 0 {
+		c.Position.col -= 4
 	}
-	if c.direction.y > 0 {
-		c.position.row += 4
+	if c.Direction.y > 0 {
+		c.Position.row += 4
 	}
-	if c.direction.y < 0 {
-		c.position.row -= 4
+	if c.Direction.y < 0 {
+		c.Position.row -= 4
 	}
 	//	if c.position.row >= c.dimension.rows ||
 	//		c.position.col >= c.dimension.cols {
 	//		return nil
 	//	}
-	fmt.Fprintf(logFile, "new bullet=%+v\n", c)
-	return &bullet{
+	b := &bullet{
 		pieceBase: &pieceBase{
-			id:     c.id,
-			color:  c.color,
+			id:     c.Id,
+			color:  c.Color,
 			symbol: '-',
-			cur:    c.position,
+			cur:    c.Position,
 			dir: direction{
-				x: c.direction.x,
-				y: c.direction.y,
+				x: c.Direction.x,
+				y: c.Direction.y,
 			},
 		},
 		rules: bulletRules{},
@@ -183,7 +180,6 @@ func (b *bullet) draw(gameboard gameboard) {
 	destCol := b.cur.col + b.dir.x
 	pos := position{destRow, destCol}
 
-	// Bounds-check.
 	if b.rules.boundsCheck(pos, gameboard.getDimension()) {
 		victimID, collided := b.rules.hasCollision(board, pos, b.id)
 		// if cell != 0 && cell != b.id {

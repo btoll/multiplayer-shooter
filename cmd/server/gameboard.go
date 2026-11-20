@@ -89,8 +89,7 @@ func (b *biplanes) draw() {
 	b.mu.Unlock()
 
 	for _, gamepiece := range pieces {
-		isStopped := gamepiece.isStopped()
-		if isStopped {
+		if gamepiece.isStopped() {
 			continue
 		}
 		gamepiece.draw(b)
@@ -116,10 +115,12 @@ func (b *biplanes) move(m msg) {
 	}
 	b.mu.Lock()
 	piece.move(m.x, m.y)
+	fmt.Fprintf(mw, "[INFO] Moved piece %d %#v\n", m.id, piece.getPosition())
 	b.mu.Unlock()
 }
 
 func (b *biplanes) register(c createGamepiece) {
+	defer b.mu.Unlock()
 	b.mu.Lock()
 	piece := newGamePiece(c)
 	// Put the piece on the board.
@@ -127,12 +128,12 @@ func (b *biplanes) register(c createGamepiece) {
 	// TODO
 	switch v := piece.(type) {
 	case *biplane:
-		b.board[v.cur.row][v.cur.col] = c.id
+		b.board[v.cur.row][v.cur.col] = c.Id
 	case *bullet:
 		b.board[v.cur.row][v.cur.col] = c.id
 	}
-	b.pieces[c.id] = piece
-	b.mu.Unlock()
+	b.pieces[c.Id] = piece
+	fmt.Fprintf(mw, "[INFO] Gamepiece created %#v\n", c)
 }
 
 func (b *biplanes) render() string {
@@ -192,5 +193,5 @@ func (b *biplanes) unregister(id int) {
 	pos := piece.getPosition()
 	b.board[pos.row][pos.col] = 0
 	delete(b.pieces, id)
-	fmt.Printf("[INFO] User ID %d unregistered.\n", id)
+	fmt.Fprintf(mw, "[INFO] User ID %d unregistered.\n", id)
 }
