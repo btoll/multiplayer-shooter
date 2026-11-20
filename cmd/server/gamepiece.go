@@ -168,6 +168,10 @@ func newBullet(c createGamepiece) *bullet {
 		},
 		rules: bulletRules{},
 	}
+	if !b.rules.boundsCheck(c.Position, c.Dimension) {
+		return nil
+	}
+	return b
 }
 
 func (b *bullet) draw(gameboard gameboard) {

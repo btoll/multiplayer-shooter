@@ -130,7 +130,10 @@ func (b *biplanes) register(c createGamepiece) {
 	case *biplane:
 		b.board[v.cur.row][v.cur.col] = c.Id
 	case *bullet:
-		b.board[v.cur.row][v.cur.col] = c.id
+		if v == nil {
+			return
+		}
+		b.board[v.cur.row][v.cur.col] = c.Id
 	}
 	b.pieces[c.Id] = piece
 	fmt.Fprintf(mw, "[INFO] Gamepiece created %#v\n", c)
