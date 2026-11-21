@@ -20,9 +20,9 @@ var (
 )
 
 type game struct {
-	board   gameboard
-	clients map[int]*client
-	mu      sync.RWMutex
+	gameboard *gameBoard
+	clients   map[int]*client
+	mu        sync.RWMutex
 }
 
 type msg struct {
@@ -33,8 +33,8 @@ type msg struct {
 
 func newGame(visibleRows, visibleCols int) *game {
 	return &game{
-		board:   newGameboard(visibleRows, visibleCols),
-		clients: make(map[int]*client),
+		gameboard: newGameboard(visibleRows, visibleCols),
+		clients:   make(map[int]*client),
 	}
 }
 
@@ -53,7 +53,7 @@ func (g *game) listen(c *client) {
 				case "\x1b[A":
 					fallthrough
 				case "k": // Up
-					g.board.move(msg{
+					g.gameboard.move(msg{
 						id: c.id,
 						x:  0,
 						y:  -1,
@@ -62,7 +62,7 @@ func (g *game) listen(c *client) {
 				case "\x1b[C":
 					fallthrough
 				case "l": // Right
-					g.board.move(msg{
+					g.gameboard.move(msg{
 						id: c.id,
 						x:  2,
 						y:  0,
@@ -71,7 +71,7 @@ func (g *game) listen(c *client) {
 				case "\x1b[B":
 					fallthrough
 				case "j": // Down
-					g.board.move(msg{
+					g.gameboard.move(msg{
 						id: c.id,
 						x:  0,
 						y:  1,
@@ -80,7 +80,7 @@ func (g *game) listen(c *client) {
 				case "\x1b[D":
 					fallthrough
 				case "h": // Left
-					g.board.move(msg{
+					g.gameboard.move(msg{
 						id: c.id,
 						x:  -2,
 						y:  0,
@@ -90,18 +90,10 @@ func (g *game) listen(c *client) {
 					//					done <- struct{}{}
 
 				case " ": // shoot
-					piece := g.board.getGamepiece(c.id)
-					g.board.register(createGamepiece{
-						Id:        randInt(100, 1000),
-						Color:     color(c.id),
-						Kind:      "bullet",
-						Position:  piece.getPosition(),
-						Direction: piece.getDirection(),
-						Dimension: g.board.(*biplanes).dimension,
-					})
+					g.gameboard.register(c.id, "bullet")
 
 				case "s": // stop
-					g.board.move(msg{
+					g.gameboard.move(msg{
 						id: c.id,
 						x:  0,
 						y:  0,
@@ -122,17 +114,7 @@ type createGamepiece struct {
 }
 
 func (g *game) register(c *client) {
-	g.clients[c.id] = c
-	dimension := g.board.(*biplanes).dimension
-	g.board.register(createGamepiece{
-		Id:    int(c.id),
-		Color: color(c.id),
-		Kind:  "biplane",
-		Position: position{
-			getDivisibleBy2(dimension.rows), // All gamepieces MUST be on rows and cols that are divisible by two.
-			getDivisibleBy2(dimension.cols),
-		},
-	})
+	g.gameboard.register(c.id, "biplane")
 	g.listen(c)
 	fmt.Fprintf(mw, "[INFO] User %s registered (ID=%d).\n", c.name, c.id)
 }
@@ -144,7 +126,7 @@ func (g *game) render() {
 	if lenClients == 0 {
 		return
 	}
-	s := g.board.render()
+	s := g.gameboard.render()
 	var err error
 	for _, client := range g.clients {
 		// Very important not to send a newline to the client!
@@ -157,5 +139,5 @@ func (g *game) render() {
 }
 
 func (g *game) update() {
-	g.board.draw()
+	g.gameboard.update()
 }

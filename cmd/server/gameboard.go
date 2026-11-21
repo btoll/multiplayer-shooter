@@ -46,19 +46,9 @@ func (c color) String() string {
 	}[c]
 }
 
-type gameboard interface {
-	draw()
-	getBoard() [][]int
-	getDimension() dimension
-	getGamepiece(int) gamepiece
-	move(msg)
-	register(createGamepiece)
-	render() string
-	unregister(int)
-}
 type gamePieces map[int]gamepiece
 
-type biplanes struct {
+type gameBoard struct {
 	board     [][]int
 	dimension dimension
 	pieces    gamePieces
@@ -70,88 +60,104 @@ type dimension struct {
 	cols int
 }
 
-func newGameboard(visibleRows, visibleCols int) gameboard {
+func newGameboard(visibleRows, visibleCols int) *gameBoard {
 	board := make([][]int, visibleRows)
 	for i := range board {
 		board[i] = make([]int, visibleCols)
 	}
-	return &biplanes{
+	return &gameBoard{
 		board:     board,
 		pieces:    make(gamePieces),
 		dimension: dimension{visibleRows, visibleCols},
 	}
 }
 
-func (b *biplanes) draw() {
-	b.mu.Lock()
-	pieces := make(gamePieces, len(b.pieces))
-	maps.Copy(pieces, b.pieces)
-	b.mu.Unlock()
-
-	for _, gamepiece := range pieces {
-		if gamepiece.isStopped() {
-			continue
-		}
-		gamepiece.draw(b)
-	}
+func (g *gameBoard) getBoard() [][]int {
+	return g.board
 }
 
-func (b *biplanes) getBoard() [][]int {
-	return b.board
+func (g *gameBoard) getDimension() dimension {
+	return g.dimension
 }
 
-func (b *biplanes) getDimension() dimension {
-	return b.dimension
+func (g *gameBoard) getGamepiece(id int) gamepiece {
+	return g.pieces[id]
 }
 
-func (b *biplanes) getGamepiece(id int) gamepiece {
-	return b.pieces[id]
-}
-
-func (b *biplanes) move(m msg) {
-	piece := b.pieces[m.id]
+func (g *gameBoard) move(m msg) {
+	g.mu.Lock()
+	piece := g.pieces[m.id]
 	if piece == nil {
+		g.mu.Unlock()
 		return
 	}
-	b.mu.Lock()
 	piece.move(m.x, m.y)
+	g.mu.Unlock()
 	fmt.Fprintf(mw, "[INFO] Moved piece %d %#v\n", m.id, piece.getPosition())
-	b.mu.Unlock()
 }
 
-func (b *biplanes) register(c createGamepiece) {
-	defer b.mu.Unlock()
-	b.mu.Lock()
-	piece := newGamePiece(c)
+func (g *gameBoard) register(id int, kind string) {
+	g.mu.Lock()
+	piece := g.getGamepiece(id)
+	cg := createGamepiece{}
+	dimension := g.getDimension()
+
+	if kind == "biplane" {
+		cg = createGamepiece{
+			Id:    int(id),
+			Color: color(id),
+			Kind:  "biplane",
+			Position: position{
+				getDivisibleBy2(dimension.rows), // All gamepieces MUST be on rows and cols that are divisible by two.
+				getDivisibleBy2(dimension.cols),
+			},
+			Dimension: dimension,
+		}
+	}
+
+	if kind == "bullet" {
+		cg = createGamepiece{
+			Id:        randInt(100, 1000),
+			Color:     color(id),
+			Kind:      "bullet",
+			Position:  piece.getPosition(),
+			Direction: piece.getDirection(),
+			Dimension: dimension,
+		}
+	}
+
+	piece = newGamePiece(cg)
 	// Put the piece on the board.
 	// The id is looked up when rendering and the cell colorized.
 	// TODO
 	switch v := piece.(type) {
 	case *biplane:
-		b.board[v.cur.row][v.cur.col] = c.Id
+		g.board[v.cur.row][v.cur.col] = cg.Id
 	case *bullet:
 		if v == nil {
+			g.mu.Unlock()
 			return
 		}
-		b.board[v.cur.row][v.cur.col] = c.Id
+		g.board[v.cur.row][v.cur.col] = cg.Id
 	}
-	b.pieces[c.Id] = piece
-	fmt.Fprintf(mw, "[INFO] Gamepiece created %#v\n", c)
+	g.pieces[cg.Id] = piece
+	g.mu.Unlock()
+	fmt.Fprintf(mw, "[INFO] Gamepiece created %#v\n", cg)
 }
 
-func (b *biplanes) render() string {
-	b.mu.Lock()
-	rows := len(b.board)
+func (g *gameBoard) render() string {
+	g.mu.Lock()
+	rows := len(g.board)
 	cols := 0
 	if rows > 0 {
-		cols = len(b.board[0])
+		cols = len(g.board[0])
 	}
 	cpBoard := make([][]int, rows)
 	for row := range cpBoard {
 		cpBoard[row] = make([]int, cols)
-		copy(cpBoard[row], b.board[row])
+		copy(cpBoard[row], g.board[row])
 	}
-	b.mu.Unlock()
+	g.mu.Unlock()
 
 	builder := &strings.Builder{}
 	builder.WriteString("\033[2J\033[H")
@@ -160,7 +166,7 @@ func (b *biplanes) render() string {
 			if cell == 0 {
 				builder.WriteByte(' ')
 			} else {
-				piece := b.pieces[cell]
+				piece := g.pieces[cell]
 				// CRITICAL: Handle the case where unregister left a ghost ID
 				if piece == nil {
 					fmt.Println("got here", cell)
@@ -168,12 +174,12 @@ func (b *biplanes) render() string {
 					builder.WriteByte(' ')
 					// 2. CLEAN UP: Remove the ghost ID from the REAL board
 					// We must lock again to safely modify the board
-					b.mu.Lock()
+					g.mu.Lock()
 					// Double-check: maybe another thread cleared it already?
-					if b.board[r][c] == cell {
-						b.board[r][c] = 0
+					if g.board[r][c] == cell {
+						g.board[r][c] = 0
 					}
-					b.mu.Unlock()
+					g.mu.Unlock()
 					continue
 				}
 				fmt.Fprintf(builder, "%s%c\033[0m", piece.getColor(), piece.getSymbol())
@@ -184,17 +190,36 @@ func (b *biplanes) render() string {
 	return builder.String()
 }
 
-func (b *biplanes) unregister(id int) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	// Clear the board slot BEFORE deleting from map
-	// This ensures render() never sees a mismatch
-	piece := b.getGamepiece(id)
+func (g *gameBoard) unregister(id int) {
+	piece := g.pieces[id]
 	if piece == nil {
 		return
 	}
+	// Clear the board slot BEFORE deleting from map
+	// This ensures render() never sees a mismatch
 	pos := piece.getPosition()
-	b.board[pos.row][pos.col] = 0
-	delete(b.pieces, id)
-	fmt.Fprintf(mw, "[INFO] User ID %d unregistered.\n", id)
+	g.board[pos.row][pos.col] = 0
+	delete(g.pieces, id)
+}
+
+func (g *gameBoard) update() {
+	g.mu.Lock()
+	pieces := make(gamePieces, len(g.pieces))
+	maps.Copy(pieces, g.pieces)
+
+	var collisions []int
+	for _, gamepiece := range pieces {
+		if gamepiece.isStopped() {
+			continue
+		}
+		if collisions = gamepiece.update(g); collisions != nil {
+			for _, collision := range collisions {
+				g.unregister(collision)
+			}
+		}
+	}
+	defer g.mu.Unlock()
+	if len(collisions) > 0 {
+		fmt.Fprintf(mw, "[INFO] User IDs %v unregistered.\n", collisions)
+	}
 }

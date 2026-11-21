@@ -35,8 +35,7 @@ func getDivisibleBy2(n int) int {
 }
 
 func handleConnection(conn net.Conn, game *game) {
-	_, err := conn.Write([]byte("What is your name? \n"))
-	if err != nil {
+	if _, err := conn.Write([]byte("What is your name? \n")); err != nil {
 		log.Printf("err=%+v\n", err)
 		err = conn.Close()
 		if err != nil {
@@ -53,12 +52,10 @@ func handleConnection(conn net.Conn, game *game) {
 			return
 		}
 
-		name = string(buf[:n-1])
 		game.mu.Lock()
-		_, found := names[name]
-		game.mu.Unlock()
-
-		if found {
+		name = string(buf[:n-1])
+		if _, found := names[name]; found {
+			game.mu.Unlock()
 			_, err := conn.Write([]byte("Name already exits, choose another. \n"))
 			if err != nil {
 				log.Printf("err=%+v\n", err)
@@ -66,9 +63,9 @@ func handleConnection(conn net.Conn, game *game) {
 			continue
 		}
 
-		game.mu.Lock()
 		colore, b := getColor()
 		if !b {
+			game.mu.Unlock()
 			// TODO
 			_, err := conn.Write([]byte("No more players allowed. \n"))
 			if err != nil {
@@ -80,28 +77,30 @@ func handleConnection(conn net.Conn, game *game) {
 			}
 			return
 		}
+		// TODO: NewClient()
 		c = &client{
 			id:   int(colore),
 			name: name,
 			conn: conn,
 		}
 		names[name] = c
+		game.clients[c.id] = c
 		game.mu.Unlock()
+
+		game.register(c)
+
+		if _, err := fmt.Fprintf(conn, "Hi %s, welcome to the server!\n", name); err != nil {
+			log.Printf("err=%+v\n", err)
+		}
 		break
 	}
-	_, err = fmt.Fprintf(conn, "Hi %s, welcome to the server!\n", name)
-	if err != nil {
-		log.Printf("err=%+v\n", err)
-	}
-	game.mu.Lock()
-	game.register(c)
-	game.mu.Unlock()
 }
 
 func shutdown(listener net.Listener, g *game) {
 	s := make(chan os.Signal, 1)
 	signal.Notify(s, syscall.SIGINT, syscall.SIGTERM)
 	<-s
+
 	var err error
 	g.mu.RLock()
 	clients := make(map[int]*client, len(g.clients))

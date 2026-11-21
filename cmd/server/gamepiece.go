@@ -3,9 +3,7 @@ package main
 import "fmt"
 
 type gamepiece interface {
-	draw(gameboard)
 	getColor() color
-	getCardinalDirection() string
 	getDirection() direction
 	getKind() string
 	getPosition() position
@@ -13,6 +11,7 @@ type gamepiece interface {
 	isStopped() bool
 	move(int, int)
 	setDirection(direction)
+	update(*gameBoard) []int
 }
 
 type direction struct {
@@ -37,21 +36,6 @@ type pieceBase struct {
 
 func (g pieceBase) getColor() color {
 	return g.color
-}
-
-func (g pieceBase) getCardinalDirection() string {
-	switch g.dir {
-	case direction{0, 1}:
-		return "north"
-	case direction{1, 0}:
-		return "east"
-	case direction{0, -1}:
-		return "south"
-	case direction{-1, 0}:
-		return "west"
-	default:
-		return "TODO"
-	}
 }
 
 func (g pieceBase) getDirection() direction {
@@ -116,20 +100,21 @@ func newBiplane(c createGamepiece) *biplane {
 	}
 }
 
-func (b *biplane) draw(gameboard gameboard) {
+func (b *biplane) update(gameboard *gameBoard) []int {
 	board := gameboard.getBoard()
 	dim := gameboard.getDimension()
 	pos := b.rules.calculateTarget(b.cur, b.dir, &dim)
 	victimID, collided := b.rules.hasCollision(board, pos, b.id)
 	if collided {
+		collisions := []int{}
 		m, n := b.rules.onCollision(b.id, victimID)
 		if m {
-			gameboard.unregister(b.id)
+			collisions = append(collisions, b.id)
 		}
 		if n {
-			gameboard.unregister(victimID)
+			collisions = append(collisions, victimID)
 		}
-		return
+		return collisions
 	}
 
 	board[b.cur.row][b.cur.col] = 0
@@ -139,6 +124,7 @@ func (b *biplane) draw(gameboard gameboard) {
 	b.cur.col = pos.col
 	board[b.cur.row][b.cur.col] = b.id
 	fmt.Fprintf(mw, "[INFO] Moved piece %d %#v\n", b.id, pos)
+	return nil
 }
 
 var _ gamepiece = (*bullet)(nil)
@@ -195,7 +181,7 @@ func increaseMagnitude(n int) int {
 	return n
 }
 
-func (b *bullet) draw(gameboard gameboard) {
+func (b *bullet) update(gameboard *gameBoard) []int {
 	board := gameboard.getBoard()
 
 	b.prev.row = b.cur.row
@@ -207,19 +193,33 @@ func (b *bullet) draw(gameboard gameboard) {
 	destCol := b.cur.col + increaseMagnitude(b.dir.x)
 	pos := position{destRow, destCol}
 
+	collisions := []int{}
 	if b.rules.boundsCheck(pos, gameboard.getDimension()) {
 		victimID, collided := b.rules.hasCollision(board, pos, b.id)
 		// if cell != 0 && cell != b.id {
 		if collided {
+			if gameboard.getGamepiece(b.id) == nil {
+				fmt.Println("got here b.id==nil")
+				return nil
+			}
+			if gameboard.getGamepiece(victimID) == nil {
+				fmt.Println("got here victimID==nil")
+				return nil
+			}
+			if gameboard.getGamepiece(b.id).getColor() == gameboard.getGamepiece(victimID).getColor() {
+				return nil
+			}
 			// Remove the hit piece.
 			m, n := b.rules.onCollision(b.id, victimID)
 			if m {
-				gameboard.unregister(b.id)
+				fmt.Println("got here1")
+				collisions = append(collisions, b.id)
 			}
 			if n {
-				gameboard.unregister(victimID)
+				fmt.Println("got here2")
+				collisions = append(collisions, victimID)
 			}
-			return
+			return collisions
 		}
 
 		// Move the bullet.
@@ -234,7 +234,11 @@ func (b *bullet) draw(gameboard gameboard) {
 		board[b.prev.row][b.prev.col] = 0
 		board[b.cur.row][b.cur.col] = 0
 		// Unregister the bullet.
-		gameboard.unregister(b.id)
-		return
+		fmt.Println("got here")
+		fmt.Println("got here")
+		fmt.Println("got here")
+		fmt.Println("got here")
+		return append(collisions, b.id)
 	}
+	return nil
 }
